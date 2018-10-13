@@ -1,0 +1,10 @@
+{
+  "autoload": {
+    "psr-4": {
+      "Logc\\": "src/"
+    }
+  },
+  "require": {
+    "smi2/phpclickhouse": "1.3.1"
+  }
+}
