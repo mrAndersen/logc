@@ -59,7 +59,7 @@ class LogcUdpServer
     /**
      * @var int
      */
-    private $maxBufferFlushSize = 10000;
+    private $maxBufferFlushSize = 10;
 
     /**
      * @var array
@@ -77,11 +77,29 @@ class LogcUdpServer
     private $verbosity = self::VERBOSITY_DEBUG;
 
     /**
+     * @var string
+     */
+    private $clickhouseTable = 'nginx';
+
+    /**
      * UdpServer constructor.
+     * @param string $configPath
      * @throws Exception
      */
-    public function __construct()
+    public function __construct(string $configPath)
     {
+        $config = parse_ini_file($configPath);
+
+        if (!$config) {
+            throw new Exception(sprintf("Configuration file %s can't be parsed", $configPath));
+        }
+
+        $this->address = $config['bind'] ?? '0.0.0.0';
+        $this->port = $config['port'] ?? '914';
+        $this->maxBufferFlushSize = $config['buffer.max_flush_size'] ?? 5000;
+        $this->flushPeriod = $config['buffer.max_flush_period'] ?? 10;
+        $this->clickhouseTable = $config['clickhouse.table'] ?? 'nginx';
+
         if (!($this->socket = socket_create(AF_INET, SOCK_DGRAM, 0))) {
             $errorCode = socket_last_error();
             $errorMessage = socket_strerror($errorCode);
@@ -89,8 +107,7 @@ class LogcUdpServer
             throw new Exception("Couldn't create socket: [$errorCode] $errorMessage");
         }
 
-
-        if (!socket_bind($this->socket, $this->address, $this->port)) {
+        if (!socket_bind($this->socket, $this->address, (int)$this->port)) {
             $errorCode = socket_last_error();
             $errorMessage = socket_strerror($errorCode);
 
@@ -99,13 +116,14 @@ class LogcUdpServer
 
         $this->parser = new NginxLogParser();
         $this->clickHouseClient = new Client([
-            'username' => 'default',
-            'password' => '',
-            'host' => 'localhost',
-            'port' => '12123'
+            'username' => $config['clickhouse.username'] ?? 'default',
+            'password' => $config['clickhouse.password'] ?? '',
+            'host' => $config['clickhouse.host'] ?? '127.0.0.1',
+            'port' => $config['clickhouse.port'] ?? '8123'
         ]);
         $this->clickHouseClient->setTimeout(1.5);
         $this->clickHouseClient->setConnectTimeOut(2);
+        $this->clickHouseClient->database($config['clickhouse.database'] ?? 'logs');
     }
 
     /**
@@ -130,17 +148,37 @@ class LogcUdpServer
      */
     protected function flush()
     {
+        $this->write();
+
         $this->buffer = [];
         $this->sizeBuffer = [];
 
         $this->lastFlushTime = microtime(true);
     }
 
+    /**
+     *
+     */
     protected function write()
     {
-        
-
-
+        $this->clickHouseClient->insert('nginx',
+            array_map(function ($node) {
+                return [
+                    ip2long($node['ip']),
+                    (new DateTime($node['date']))->format('Y-m-d H:i:s'),
+                    $node['uri'],
+                    $node['method'],
+                    (int)$node['status'],
+                    (int)$node['bytes'],
+                ];
+            }, $this->buffer), [
+                'ip',
+                'time',
+                'uri',
+                'method',
+                'status',
+                'bytes',
+            ]);
     }
 
     /**
@@ -152,9 +190,10 @@ class LogcUdpServer
 
         $this->pingClickhouse();
         $this->stdout(sprintf(
-            "Connected to clickhouse at %s:%d",
+            "Connected to clickhouse at %s:%d, table = %s",
             $this->clickHouseClient->getConnectHost(),
-            $this->clickHouseClient->getConnectPort()
+            $this->clickHouseClient->getConnectPort(),
+            $this->clickhouseTable
         ));
 
         $this->startTime = microtime(true);

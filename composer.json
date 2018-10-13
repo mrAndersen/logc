@@ -5,6 +5,7 @@
     }
   },
   "require": {
+    "ext-sockets": "*",
     "smi2/phpclickhouse": "1.3.1"
   }
 }
