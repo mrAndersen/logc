@@ -8,8 +8,8 @@ use Exception;
 
 class LogcUdpServer
 {
+    const VERBOSITY_NONE = 0;
     const VERBOSITY_DEBUG = 1;
-    const VERBOSITY_NONE = 2;
 
     /**
      * @var string
@@ -140,7 +140,24 @@ class LogcUdpServer
      */
     protected function pingClickhouse()
     {
-        $tables = $this->clickHouseClient->showTables();
+        try {
+            $size = $this->clickHouseClient->tableSize($this->clickhouseTable);
+
+            if (!$size) {
+                throw new Exception(sprintf("Clickhouse table \"%s\" not found", $this->clickhouseTable));
+            }
+
+            $this->stdout(sprintf(
+                "Connected to clickhouse at %s:%d, table = %s, size=%s",
+                $this->clickHouseClient->getConnectHost(),
+                $this->clickHouseClient->getConnectPort(),
+                $this->clickhouseTable,
+                $size['size']
+            ));
+        } catch (Exception $exception) {
+            $this->stdout($exception->getMessage());
+            $this->close();
+        }
     }
 
     /**
@@ -187,14 +204,7 @@ class LogcUdpServer
     public function run()
     {
         $this->stdout(sprintf("Started logc at {$this->address}:{$this->port}, verbosity %s", $this->verbosity));
-
         $this->pingClickhouse();
-        $this->stdout(sprintf(
-            "Connected to clickhouse at %s:%d, table = %s",
-            $this->clickHouseClient->getConnectHost(),
-            $this->clickHouseClient->getConnectPort(),
-            $this->clickhouseTable
-        ));
 
         $this->startTime = microtime(true);
         $this->lastFlushTime = $this->startTime;
@@ -241,8 +251,8 @@ class LogcUdpServer
      */
     public function close()
     {
-        $this->flush();
         socket_close($this->socket);
+        die();
     }
 }
 
