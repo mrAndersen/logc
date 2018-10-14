@@ -82,6 +82,11 @@ class LogcUdpServer
     private $clickhouseTable = 'nginx';
 
     /**
+     * @var float
+     */
+    private $lastFlushDuration = 0;
+
+    /**
      * UdpServer constructor.
      * @param string $configPath
      * @throws Exception
@@ -99,6 +104,7 @@ class LogcUdpServer
         $this->maxBufferFlushSize = $config['buffer.max_flush_size'] ?? 5000;
         $this->flushPeriod = $config['buffer.max_flush_period'] ?? 10;
         $this->clickhouseTable = $config['clickhouse.table'] ?? 'nginx';
+        $this->verbosity = $config['verbosity'] ?? self::VERBOSITY_NONE;
 
         if (!($this->socket = socket_create(AF_INET, SOCK_DGRAM, 0))) {
             $errorCode = socket_last_error();
@@ -113,6 +119,8 @@ class LogcUdpServer
 
             throw new Exception("Could not bind to {$this->address} [$errorCode] $errorMessage");
         }
+
+        socket_set_nonblock($this->socket);
 
         $this->parser = new NginxLogParser();
         $this->clickHouseClient = new Client([
@@ -165,12 +173,14 @@ class LogcUdpServer
      */
     protected function flush()
     {
+        $start = microtime(true);
         $this->write();
 
         $this->buffer = [];
         $this->sizeBuffer = [];
 
         $this->lastFlushTime = microtime(true);
+        $this->lastFlushDuration = microtime(true) - $start;
     }
 
     /**
@@ -178,7 +188,11 @@ class LogcUdpServer
      */
     protected function write()
     {
-        $this->clickHouseClient->insert('nginx',
+        if (!$this->buffer) {
+            return;
+        }
+
+        $this->clickHouseClient->insert($this->clickhouseTable,
             array_map(function ($node) {
                 return [
                     ip2long($node['ip']),
@@ -212,18 +226,8 @@ class LogcUdpServer
         while (1) {
             $this->currentTime = microtime(true);
 
-            $bytes = socket_recvfrom($this->socket, $buffer, 4096, 0, $senderIp, $senderPort);
-            $parsed = $this->parser->parse($buffer);
-
-            if (!$parsed) {
-                continue;
-            }
-
-            $this->buffer[] = $parsed;
-            $this->sizeBuffer[] = $bytes;
-
             $sizeCondition = count($this->buffer) >= $this->maxBufferFlushSize;
-            $timeCondition = (microtime(true) - $this->lastFlushTime) >= $this->flushPeriod;
+            $timeCondition = ($this->currentTime - $this->lastFlushTime) >= $this->flushPeriod;
 
             if ($sizeCondition || $timeCondition) {
                 $condition = "none";
@@ -236,9 +240,33 @@ class LogcUdpServer
                     $condition = "time";
                 }
 
-                $this->stdout(sprintf("Buffer flushed, %d total, %s condition, %d bytes", count($this->buffer), $condition, array_sum($this->sizeBuffer)));
+                $buffSize = array_sum($this->sizeBuffer);
+                $buffCount = count($this->buffer);
+
                 $this->flush();
+                $this->stdout(sprintf(
+                    "Buffer flushed, %d total, %s condition, %d bytes in %d ms",
+                    $buffCount,
+                    $condition,
+                    $buffSize,
+                    round($this->lastFlushDuration * 1000, 0)
+                ));
             }
+
+            $bytes = socket_recvfrom($this->socket, $buffer, 4096, 0, $senderIp, $senderPort);
+
+            if (!$bytes) {
+                continue;
+            }
+
+            $parsed = $this->parser->parse($buffer);
+
+            if (!$parsed) {
+                continue;
+            }
+
+            $this->buffer[] = $parsed;
+            $this->sizeBuffer[] = $bytes;
 
             if ($this->verbosity == self::VERBOSITY_DEBUG) {
                 $this->stdout($parsed['uri']);
