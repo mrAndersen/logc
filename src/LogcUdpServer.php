@@ -5,6 +5,7 @@ namespace Logc;
 use ClickHouseDB\Client;
 use DateTime;
 use Exception;
+use Logc\LogParser\NginxLogParser;
 
 class LogcUdpServer
 {
@@ -82,6 +83,11 @@ class LogcUdpServer
     private $clickhouseTable = 'nginx';
 
     /**
+     * @var string
+     */
+    private $clickhouseDtabase = "logs";
+
+    /**
      * @var float
      */
     private $lastFlushDuration = 0;
@@ -103,7 +109,10 @@ class LogcUdpServer
         $this->port = $config['port'] ?? '914';
         $this->maxBufferFlushSize = $config['buffer.max_flush_size'] ?? 5000;
         $this->flushPeriod = $config['buffer.max_flush_period'] ?? 10;
+
         $this->clickhouseTable = $config['clickhouse.table'] ?? 'nginx';
+        $this->clickhouseDtabase = $config['clickhouse.database'] ?? 'logs';
+
         $this->verbosity = $config['verbosity'] ?? self::VERBOSITY_NONE;
 
         if (!($this->socket = socket_create(AF_INET, SOCK_DGRAM, 0))) {
@@ -131,7 +140,9 @@ class LogcUdpServer
         ]);
         $this->clickHouseClient->setTimeout(1.5);
         $this->clickHouseClient->setConnectTimeOut(2);
-        $this->clickHouseClient->database($config['clickhouse.database'] ?? 'logs');
+        $this->clickHouseClient->database(
+            $this->clickhouseDtabase
+        );
     }
 
     /**
@@ -152,9 +163,19 @@ class LogcUdpServer
             $size = $this->clickHouseClient->tableSize($this->clickhouseTable);
 
             if (!$size) {
-                throw new Exception(sprintf("Clickhouse table \"%s\" not found", $this->clickhouseTable));
+                $this->stdout(sprintf("Clickhouse table \"%s\" not found", $this->clickhouseTable));
+
+                $this->clickHouseClient->write(
+                    $this->parser->getClickhhouseTableDdl(
+                        $this->clickhouseDtabase,
+                        $this->clickhouseTable
+                    )
+                );
+
+                $this->stdout(sprintf("Created table \"%s\"", $this->clickhouseTable));
             }
 
+            $size = $this->clickHouseClient->tableSize($this->clickhouseTable);
             $this->stdout(sprintf(
                 "Connected to clickhouse at %s:%d, table = %s, size=%s",
                 $this->clickHouseClient->getConnectHost(),
@@ -192,24 +213,11 @@ class LogcUdpServer
             return;
         }
 
-        $this->clickHouseClient->insert($this->clickhouseTable,
-            array_map(function ($node) {
-                return [
-                    ip2long($node['ip']),
-                    (new DateTime($node['date']))->format('Y-m-d H:i:s'),
-                    $node['uri'],
-                    $node['method'],
-                    (int)$node['status'],
-                    (int)$node['bytes'],
-                ];
-            }, $this->buffer), [
-                'ip',
-                'time',
-                'uri',
-                'method',
-                'status',
-                'bytes',
-            ]);
+        $this->clickHouseClient->insert(
+            $this->clickhouseTable,
+            $this->parser->map($this->buffer),
+            $this->parser->getClickhouseFields()
+        );
     }
 
     /**
@@ -245,11 +253,12 @@ class LogcUdpServer
 
                 $this->flush();
                 $this->stdout(sprintf(
-                    "Buffer flushed, %d total, %s condition, %d bytes in %d ms",
+                    "Buffer flushed, %d total, %s condition, %d bytes in %d ms, %d memory",
                     $buffCount,
                     $condition,
                     $buffSize,
-                    round($this->lastFlushDuration * 1000, 0)
+                    round($this->lastFlushDuration * 1000, 0),
+                    memory_get_usage(true)
                 ));
             }
 
