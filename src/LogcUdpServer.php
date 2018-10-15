@@ -205,19 +205,36 @@ class LogcUdpServer
     }
 
     /**
-     *
+     * @param int $tries
      */
-    protected function write()
+    protected function write(int &$tries = 0)
     {
+        $maxTries = 3;
+        $tryTtl = 2;
+
         if (!$this->buffer) {
             return;
         }
 
-        $this->clickHouseClient->insert(
-            $this->clickhouseTable,
-            $this->parser->map($this->buffer),
-            $this->parser->getClickhouseFields()
-        );
+        try {
+            $this->clickHouseClient->insert(
+                $this->clickhouseTable,
+                $this->parser->map($this->buffer),
+                $this->parser->getClickhouseFields()
+            );
+        } catch (Exception $exception) {
+            if ($tries < $maxTries) {
+                $this->stdout(sprintf("Error during clickhouse flush, will retry in %d seconds", $tryTtl));
+
+                sleep($tryTtl);
+                $tries++;
+
+                $this->write($tries);
+            } else {
+                $this->stdout(sprintf("Fatal error, unable to flush to clickhouse during %d tries", $maxTries));
+                die();
+            }
+        }
     }
 
     /**
