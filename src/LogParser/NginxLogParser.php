@@ -4,6 +4,7 @@ namespace Logc\LogParser;
 
 
 use DateTime;
+use DateTimeZone;
 use Exception;
 use Logc\Interfaces\LogParserInterface;
 
@@ -48,7 +49,7 @@ class NginxLogParser implements LogParserInterface
         return array_map(function ($node) {
             return [
                 ip2long($node['ip']),
-                (new DateTime($node['date']))->format('Y-m-d H:i:s'),
+                (new DateTime($node['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
                 $node['uri'],
                 $node['method'],
                 $node['protocol'],
