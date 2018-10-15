@@ -85,7 +85,7 @@ class LogcUdpServer
     /**
      * @var string
      */
-    private $clickhouseDtabase = "logs";
+    private $clickhouseDatabase = "logs";
 
     /**
      * @var float
@@ -111,7 +111,7 @@ class LogcUdpServer
         $this->flushPeriod = $config['buffer.max_flush_period'] ?? 10;
 
         $this->clickhouseTable = $config['clickhouse.table'] ?? 'nginx';
-        $this->clickhouseDtabase = $config['clickhouse.database'] ?? 'logs';
+        $this->clickhouseDatabase = $config['clickhouse.database'] ?? 'logs';
 
         $this->verbosity = $config['verbosity'] ?? self::VERBOSITY_NONE;
 
@@ -141,7 +141,7 @@ class LogcUdpServer
         $this->clickHouseClient->setTimeout(1.5);
         $this->clickHouseClient->setConnectTimeOut(2);
         $this->clickHouseClient->database(
-            $this->clickhouseDtabase
+            $this->clickhouseDatabase
         );
     }
 
@@ -167,7 +167,7 @@ class LogcUdpServer
 
                 $this->clickHouseClient->write(
                     $this->parser->getClickhhouseTableDdl(
-                        $this->clickhouseDtabase,
+                        $this->clickhouseDatabase,
                         $this->clickhouseTable
                     )
                 );
@@ -232,7 +232,7 @@ class LogcUdpServer
                 $this->write($tries);
             } else {
                 $this->stdout(sprintf("Fatal error, unable to flush to clickhouse during %d tries", $maxTries));
-                die();
+                $this->close();
             }
         }
     }
