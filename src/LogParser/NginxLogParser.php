@@ -11,7 +11,7 @@ class NginxLogParser implements LogParserInterface
     /**
      * @var string
      */
-    private $regex = '<(\d+)>(.*)nginx:\s(.*?)\s(.*?)\s\[(.*?)\]\s\"(GET|POST|PUT|HEAD|PATCH|DELETE|UPDATE|OPTIONS|TRACE|PATCH)\s(.*?)\s(.*?)\"\s(\d+)\s(\d+)\s\"(.*?)\"\s\"(.*?)\"$';
+    private $regex = '<(\d+)>(.*)nginx:\s(.*?)\s(.*?)\[(.*?)\]\s\"(GET|POST|PUT|HEAD|PATCH|DELETE|UPDATE|OPTIONS|TRACE|PATCH)\s(.*?)\s(.*?)\"\s(\d+)\s(\d+)\s\"(.*?)\"\s\"(.*?)\"$';
 
     /**
      * @var array
@@ -19,8 +19,8 @@ class NginxLogParser implements LogParserInterface
     private $mapping = [
         'unknown1',
         'unknown2',
-        'unknown3',
         'ip',
+        'unknown3',
         'date',
         'method',
         'uri',
