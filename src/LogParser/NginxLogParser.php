@@ -84,8 +84,8 @@ class NginxLogParser implements LogParserInterface
     {
         preg_match("/" . $this->regex . "/", $rawMessage, $matches);
         unset($matches[0]);
-        $matches = array_values($matches);
 
+        $matches = array_values($matches);
         $mapped = array_combine($this->mapping, $matches);
 
         if (!$mapped) {
