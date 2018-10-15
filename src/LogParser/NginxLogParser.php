@@ -4,6 +4,7 @@ namespace Logc\LogParser;
 
 
 use DateTime;
+use Exception;
 use Logc\Interfaces\LogParserInterface;
 
 class NginxLogParser implements LogParserInterface
@@ -11,7 +12,7 @@ class NginxLogParser implements LogParserInterface
     /**
      * @var string
      */
-    private $regex = '<(\d+)>(.*)nginx:\s(.*?)\s(.*?)\s\[(.*?)\]\s\"(GET|POST|PUT|HEAD|PATCH|DELETE|UPDATE|OPTIONS|TRACE|PATCH)\s(.*?)\s(.*?)\"\s(\d+)\s(\d+)\s\"(.*?)\"\s\"(.*?)\"$';
+    private $regex = '<(\d+)>(.*)nginx:\s(.*?)\s\[(.*?)\]\s\"(GET|POST|PUT|HEAD|PATCH|DELETE|UPDATE|OPTIONS|TRACE|PATCH)\s(.*?)\s(.*?)\"\s(\d+)\s(\d+)\s\"(.*?)\"\s\"(.*?)\"$';
 
     /**
      * @var array
@@ -20,7 +21,6 @@ class NginxLogParser implements LogParserInterface
         'unknown1',
         'unknown2',
         'ip',
-        'unknown3',
         'date',
         'method',
         'uri',
@@ -51,6 +51,7 @@ class NginxLogParser implements LogParserInterface
                 (new DateTime($node['date']))->format('Y-m-d H:i:s'),
                 $node['uri'],
                 $node['method'],
+                $node['protocol'],
                 (int)$node['status'],
                 (int)$node['bytes'],
                 $node['referer'],
@@ -69,6 +70,7 @@ class NginxLogParser implements LogParserInterface
             'time',
             'uri',
             'method',
+            'protocol',
             'status',
             'bytes',
             'referer',
@@ -82,17 +84,25 @@ class NginxLogParser implements LogParserInterface
      */
     public function parse(string $rawMessage): array
     {
-        preg_match("/" . $this->regex . "/", $rawMessage, $matches);
-        unset($matches[0]);
+        try {
+            preg_match("/" . $this->regex . "/", $rawMessage, $matches);
+            unset($matches[0]);
 
-        $matches = array_values($matches);
-        $mapped = array_combine($this->mapping, $matches);
+            $matches = array_values($matches);
+            $mapped = array_combine($this->mapping, $matches);
 
-        if (!$mapped) {
-            return [];
+            if (count($matches) !== count($this->mapping)) {
+                throw new Exception("Error mapping regex");
+            }
+
+            if (!$mapped) {
+                return [];
+            }
+
+            return $mapped;
+        } catch (Exception $exception) {
+            echo(sprintf("Error while parsing message %s, %s\n", $rawMessage, $exception->getMessage()));
         }
-
-        return $mapped;
     }
 
     /**
@@ -110,6 +120,7 @@ create table {$databaseName}.{$tableName}
 	date Date default toDate(time),
 	uri String,
 	method String,
+	protocol String,
 	status UInt16,
 	bytes UInt16,
 	referer String,
