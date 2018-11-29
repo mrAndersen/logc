@@ -1,5 +1,6 @@
 <?php declare(strict_types=1);
 
+
 namespace Logc\LogParser;
 
 
@@ -9,12 +10,12 @@ use Exception;
 use Logc\Exception\ParseException;
 use Logc\Interfaces\LogParserInterface;
 
-class NginxLogParser extends AbstractLogParser implements LogParserInterface
+class Cm2NginxLogParser extends AbstractLogParser implements LogParserInterface
 {
     /**
      * @var string
      */
-    private $regex = '<(\d+)>(.*)nginx:\s(.*?)\s\[(.*?)\]\s\"(GET|POST|PUT|HEAD|PATCH|DELETE|UPDATE|OPTIONS|TRACE|PATCH)\s(.*?)\s(.*?)\"\s(\d+)\s(\d+)\s\"(.*?)\"\s\"(.*?)\"$';
+    private $regex = '<(\d+)>(.*)nginx:\s<time=(.*)\|url=(.*)\|status=(\d+)\|referer=(.*)\|bytes=(\d+)\|cache=(.*)\|method=(GET|POST|PUT|HEAD|PATCH|DELETE|UPDATE|OPTIONS|TRACE|PATCH)\|body=(.*)\|request_time=(.*)>$';
 
     /**
      * @var array
@@ -22,15 +23,15 @@ class NginxLogParser extends AbstractLogParser implements LogParserInterface
     private $mapping = [
         'unknown1',
         'unknown2',
-        'ip',
         'date',
-        'method',
         'uri',
-        'protocol',
         'status',
-        'bytes',
         'referer',
-        'userAgent'
+        'bytes',
+        'cache',
+        'method',
+        'body',
+        'requestTime'
     ];
 
     /**
@@ -43,42 +44,32 @@ class NginxLogParser extends AbstractLogParser implements LogParserInterface
     }
 
     /**
-     * @param array $buffer , array of log data
+     * @param array $buffer
      * @return array
      */
     public function map(array $buffer): array
     {
         return array_map(function ($node) {
             return [
-                ip2long($node['ip']),
                 (new DateTime($node['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
                 $node['uri'],
-                $node['method'],
-                $node['protocol'],
                 (int)$node['status'],
-                (int)$node['bytes'],
                 $node['referer'],
-                $node['userAgent']
+                (int)$node['bytes'],
+                $node['cache'],
+                $node['method'],
+                $node['body'],
+                (float)$node['requestTime'],
             ];
         }, $buffer);
     }
 
     /**
-     * @return array
+     * @return string
      */
-    public function getClickhouseFields(): array
+    public function getName(): string
     {
-        return [
-            'ip',
-            'time',
-            'uri',
-            'method',
-            'protocol',
-            'status',
-            'bytes',
-            'referer',
-            'userAgent',
-        ];
+        return "nginx";
     }
 
     /**
@@ -119,37 +110,38 @@ class NginxLogParser extends AbstractLogParser implements LogParserInterface
         return <<<SQL
 create table {$databaseName}.{$tableName}
 (
-	ip UInt32,
-	time DateTime,
-	date Date default toDate(time),
-	uri String,
-	method String,
-	protocol String,
-	status UInt16,
-	bytes UInt16,
-	referer String,
-	userAgent String
+    time DateTime,
+    date Date default toDate(time),
+    uri String,
+    status UInt16,
+    referer String,
+    bytes UInt16,
+    cache String,
+    method String,
+    body String,
+    requestTime Float32
 )
-engine = MergeTree(date, (ip, status, time, uri, method, referer, userAgent), 8192);
+engine = MergeTree(date, (status, time, uri, method), 8192);
 SQL;
     }
 
     /**
-     * @return string
+     * @return array
      */
-    public function getName(): string
+    public function getClickhouseFields(): array
     {
-        return "nginx";
+        return [
+            'time',
+            'uri',
+            'status',
+            'referer',
+            'bytes',
+            'cache',
+            'method',
+            'body',
+            'requestTime'
+        ];
     }
+
+
 }
-
-
-
-
-
-
-
-
-
-
-

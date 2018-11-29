@@ -2,10 +2,10 @@
 
 namespace Logc;
 
-use ClickHouseDB\Client;
 use DateTime;
 use Exception;
-use Logc\LogParser\NginxLogParser;
+use Logc\Interfaces\LogParserInterface;
+use Symfony\Component\Yaml\Yaml;
 
 class LogcUdpServer
 {
@@ -28,14 +28,9 @@ class LogcUdpServer
     private $socket;
 
     /**
-     * @var NginxLogParser
+     * @var LogParserInterface[]
      */
-    private $parser;
-
-    /**
-     * @var Client
-     */
-    private $clickHouseClient;
+    private $parsers = [];
 
     /**
      * @var int
@@ -78,19 +73,14 @@ class LogcUdpServer
     private $verbosity = self::VERBOSITY_DEBUG;
 
     /**
-     * @var string
-     */
-    private $clickhouseTable = 'nginx';
-
-    /**
-     * @var string
-     */
-    private $clickhouseDatabase = "logs";
-
-    /**
      * @var float
      */
     private $lastFlushDuration = 0;
+
+    /**
+     * @var
+     */
+    private $currentWriteParser;
 
     /**
      * UdpServer constructor.
@@ -99,22 +89,41 @@ class LogcUdpServer
      */
     public function __construct(string $configPath)
     {
-        $config = parse_ini_file($configPath);
+        $this->prepareConfig($configPath);
+        $this->prepareSocket();
+    }
+
+    /**
+     * @param string $configPath
+     * @throws Exception
+     */
+    protected function prepareConfig(string $configPath)
+    {
+        $config = Yaml::parseFile($configPath);
 
         if (!$config) {
             throw new Exception(sprintf("Configuration file %s can't be parsed", $configPath));
         }
 
-        $this->address = $config['bind'] ?? '0.0.0.0';
-        $this->port = $config['port'] ?? '914';
-        $this->maxBufferFlushSize = $config['buffer.max_flush_size'] ?? 5000;
-        $this->flushPeriod = $config['buffer.max_flush_period'] ?? 10;
+        $this->address = $config['logc']['bind'] ?? '0.0.0.0';
+        $this->port = $config['logc']['port'] ?? '914';
+        $this->maxBufferFlushSize = $config['logc']['buffer']['max_flush_size'] ?? 5000;
+        $this->flushPeriod = $config['logc']['buffer']['max_flush_period'] ?? 10;
+        $this->verbosity = $config['logc']['verbosity'] ?? self::VERBOSITY_NONE;
 
-        $this->clickhouseTable = $config['clickhouse.table'] ?? 'nginx';
-        $this->clickhouseDatabase = $config['clickhouse.database'] ?? 'logs';
+        foreach ($config['outputs'] as $name => $output) {
+            /** @var LogParserInterface $parser */
+            $parser = new $output['parser']($output);
+            $parser->setName($name);
+            $this->parsers[] = $parser;
+        }
+    }
 
-        $this->verbosity = $config['verbosity'] ?? self::VERBOSITY_NONE;
-
+    /**
+     * @throws Exception
+     */
+    protected function prepareSocket()
+    {
         if (!($this->socket = socket_create(AF_INET, SOCK_DGRAM, 0))) {
             $errorCode = socket_last_error();
             $errorMessage = socket_strerror($errorCode);
@@ -130,115 +139,11 @@ class LogcUdpServer
         }
 
         socket_set_nonblock($this->socket);
-
-        $this->parser = new NginxLogParser();
-        $this->clickHouseClient = new Client([
-            'username' => $config['clickhouse.username'] ?? 'default',
-            'password' => $config['clickhouse.password'] ?? '',
-            'host' => $config['clickhouse.host'] ?? '127.0.0.1',
-            'port' => $config['clickhouse.port'] ?? '8123'
-        ]);
-        $this->clickHouseClient->setTimeout(1.5);
-        $this->clickHouseClient->setConnectTimeOut(2);
-        $this->clickHouseClient->database(
-            $this->clickhouseDatabase
-        );
-    }
-
-    /**
-     * @param string $message
-     */
-    protected function stdout(string $message)
-    {
-        $d = new DateTime();
-        echo(sprintf("[%s] {$message}\n", $d->format('c')));
     }
 
     /**
      *
-     */
-    protected function pingClickhouse()
-    {
-        try {
-            $size = $this->clickHouseClient->tableSize($this->clickhouseTable);
-
-            if (!$size) {
-                $this->stdout(sprintf("Clickhouse table \"%s\" not found", $this->clickhouseTable));
-
-                $this->clickHouseClient->write(
-                    $this->parser->getClickhhouseTableDdl(
-                        $this->clickhouseDatabase,
-                        $this->clickhouseTable
-                    )
-                );
-
-                $this->stdout(sprintf("Created table \"%s\"", $this->clickhouseTable));
-            }
-
-            $size = $this->clickHouseClient->tableSize($this->clickhouseTable);
-            $this->stdout(sprintf(
-                "Connected to clickhouse at %s:%d, table = %s, size=%s",
-                $this->clickHouseClient->getConnectHost(),
-                $this->clickHouseClient->getConnectPort(),
-                $this->clickhouseTable,
-                $size['size']
-            ));
-        } catch (Exception $exception) {
-            $this->stdout($exception->getMessage());
-            $this->close();
-        }
-    }
-
-    /**
-     *
-     */
-    protected function flush()
-    {
-        $start = microtime(true);
-        $this->write();
-
-        $this->buffer = [];
-        $this->sizeBuffer = [];
-
-        $this->lastFlushTime = microtime(true);
-        $this->lastFlushDuration = microtime(true) - $start;
-    }
-
-    /**
-     * @param int $tries
-     */
-    protected function write(int &$tries = 0)
-    {
-        $maxTries = 3;
-        $tryTtl = 2;
-
-        if (!$this->buffer) {
-            return;
-        }
-
-        try {
-            $this->clickHouseClient->insert(
-                $this->clickhouseTable,
-                $this->parser->map($this->buffer),
-                $this->parser->getClickhouseFields()
-            );
-        } catch (Exception $exception) {
-            if ($tries < $maxTries) {
-                $this->stdout(sprintf("Error during clickhouse flush, will retry in %d seconds", $tryTtl));
-
-                sleep($tryTtl);
-                $tries++;
-
-                $this->write($tries);
-            } else {
-                $this->stdout(sprintf("Fatal error, unable to flush to clickhouse during %d tries", $maxTries));
-                $this->close();
-            }
-        }
-    }
-
-    /**
-     *
+     * @throws Exception
      */
     public function run()
     {
@@ -271,16 +176,16 @@ class LogcUdpServer
 
                 $this->flush();
                 $this->stdout(sprintf(
-                    "Buffer flushed, %d total, %s condition, %d bytes in %d ms, %d memory",
+                    "Buffer flushed, %d total, %s condition, %d bytes in %d ms, %f memory",
                     $buffCount,
                     $condition,
                     $buffSize,
                     round($this->lastFlushDuration * 1000, 0),
-                    memory_get_usage(true)
+                    round(memory_get_usage(true) / 1024 / 1024, 2)
                 ));
             }
 
-            $bytes = socket_recvfrom($this->socket, $buffer, 4096, 0, $senderIp, $senderPort);
+            $bytes = socket_recvfrom($this->socket, $message, 4096, 0, $senderIp, $senderPort);
 
             if (!$bytes) {
                 if ($this->verbosity == self::VERBOSITY_DEBUG) {
@@ -291,19 +196,92 @@ class LogcUdpServer
                 continue;
             }
 
-            $parsed = $this->parser->parse($buffer);
-
-            if (!$parsed) {
-                $this->stdout(sprintf("Unable to parse message %s", $buffer));
-                continue;
-            }
-
-            $this->buffer[] = $parsed;
-            $this->sizeBuffer[] = $bytes;
-
             if ($this->verbosity == self::VERBOSITY_DEBUG) {
-                $this->stdout($parsed['uri']);
+                $this->stdout($message);
             }
+
+            foreach ($this->parsers as $parser) {
+                if (strpos($message, $parser->getName()) !== false) {
+                    $parsed = $parser->parse($message);
+
+                    if (!$parsed) {
+                        $this->stdout(sprintf("Unable to parse message %s", $message));
+                        continue;
+                    }
+
+                    $this->buffer[$parser->getName()][] = $parsed;
+                    $this->sizeBuffer[] = $bytes;
+
+                    if ($this->verbosity == self::VERBOSITY_DEBUG) {
+                        $this->stdout(sprintf(
+                            "Parsed %s from %s",
+                            $parsed['uri'],
+                            $parser->getName()
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * @param string $message
+     * @throws Exception
+     */
+    protected function stdout(string $message)
+    {
+        $d = new DateTime();
+        echo(sprintf("[%s] {$message}\n", $d->format('c')));
+    }
+
+    /**
+     *
+     * @throws Exception
+     */
+    protected function pingClickhouse()
+    {
+        try {
+            foreach ($this->parsers as $parser) {
+                $size = $parser->getClient()->tableSize($parser->getSettings()['table']);
+
+                if (!$size) {
+                    $this->stdout(
+                        sprintf(
+                            "Clickhouse table \"%s\" not found on provider %s",
+                            $parser->getSettings()['table'],
+                            $parser->getName()
+                        )
+                    );
+
+                    $parser->getClient()->write(
+                        $parser->getClickhhouseTableDdl(
+                            $parser->getSettings()['database'],
+                            $parser->getSettings()['table']
+                        )
+                    );
+
+                    $this->stdout(
+                        sprintf(
+                            "Created table \"%s\" on provider %s",
+                            $parser->getSettings()['table'],
+                            $parser->getName()
+                        )
+                    );
+                }
+
+                $size = $parser->getClient()->tableSize($parser->getSettings()['table']);
+
+                $this->stdout(sprintf(
+                    "Connected to clickhouse at %s:%d, table = %s, size=%s",
+                    $parser->getClient()->getConnectHost(),
+                    $parser->getClient()->getConnectPort(),
+                    $parser->getSettings()['table'],
+                    $size['size']
+                ));
+            }
+        } catch (Exception $exception) {
+            $this->stdout($exception->getMessage());
+            $this->close();
         }
     }
 
@@ -314,6 +292,73 @@ class LogcUdpServer
     {
         socket_close($this->socket);
         die();
+    }
+
+    /**
+     *
+     * @throws Exception
+     */
+    protected function flush()
+    {
+        $start = microtime(true);
+        $this->write();
+
+        $this->buffer = [];
+        $this->sizeBuffer = [];
+
+        $this->lastFlushTime = microtime(true);
+        $this->lastFlushDuration = microtime(true) - $start;
+    }
+
+    /**
+     * @param int $tries
+     * @throws Exception
+     */
+    protected function write(int &$tries = 0)
+    {
+        $maxTries = 3;
+        $tryTtl = 2;
+
+        if (!$this->buffer) {
+            return;
+        }
+
+        try {
+            foreach ($this->parsers as $parser) {
+                $this->currentWriteParser = $parser;
+
+                $parser
+                    ->getClient()
+                    ->insert(
+                        $parser->getSettings()['table'],
+                        $parser->map($this->buffer[$parser->getName()]),
+                        $parser->getClickhouseFields()
+                    );
+            }
+        } catch (Exception $exception) {
+            if ($tries < $maxTries) {
+                $this->stdout(
+                    sprintf(
+                        "Error during clickhouse flush on provider %s, will retry in %d seconds",
+                        $this->currentWriteParser->getName(),
+                        $tryTtl
+                    )
+                );
+
+                sleep($tryTtl);
+                $tries++;
+
+                $this->write($tries);
+            } else {
+                $this->stdout(
+                    sprintf(
+                        "Fatal error, unable to flush to clickhouse on provider %s during %d tries",
+                        $this->currentWriteParser->getName(),
+                        $maxTries
+                    ));
+                $this->close();
+            }
+        }
     }
 }
 

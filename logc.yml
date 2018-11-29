@@ -1,0 +1,26 @@
+logc:
+  bind: "0.0.0.0"
+  port: 914
+  # const VERBOSITY_NONE = 0;
+  # const VERBOSITY_DEBUG = 1;
+  verbosity: 1
+  buffer:
+    # items
+    max_flush_size: 10000
+    # seconds
+    max_flush_period: 10
+
+outputs:
+  clickhouse_nginx:
+    parser:  Logc\LogParser\Cm2NginxLogParser
+    timeout:
+      connection: 2
+      #single operation
+      write: 1
+    port: 8123
+    host: "clickhouse"
+    username: "default"
+    password: ~
+    database: "default"
+    table: "nginx"
+

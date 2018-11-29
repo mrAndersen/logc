@@ -1,0 +1,22 @@
+version: "3.5"
+networks:
+  bcm-network:
+    external: true
+
+services:
+  logc:
+    restart: always
+    environment:
+      - ENV=dev
+      - XDEBUG_CONFIG=remote_host=host.docker.internal
+      - PHP_IDE_CONFIG=serverName=logc
+    volumes:
+      - ./:/usr/local/logc
+    ports:
+      - 914:914/udp
+    build:
+      dockerfile: ./docker/Dockerfile
+      context: .
+    container_name: logc
+    networks:
+      - bcm-network

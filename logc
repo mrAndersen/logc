@@ -6,7 +6,7 @@ use Logc\LogcUdpServer;
 require 'vendor/autoload.php';
 set_time_limit(0);
 
-$configIni = __DIR__ . "/logc.ini";
+$configIni = __DIR__ . "/logc.yml";
 
 foreach ($argv as $arg) {
     if ($arg === "--configuration") {
