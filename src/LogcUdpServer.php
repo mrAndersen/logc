@@ -172,7 +172,11 @@ class LogcUdpServer
                 }
 
                 $buffSize = array_sum($this->sizeBuffer);
-                $buffCount = count($this->buffer);
+
+                $buffCount = 0;
+                foreach ($this->buffer as $outputs) {
+                    $buffCount += count($outputs);
+                }
 
                 $this->flush();
                 $this->stdout(sprintf(
