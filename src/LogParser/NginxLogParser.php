@@ -43,45 +43,6 @@ class NginxLogParser extends AbstractLogParser implements LogParserInterface
     }
 
     /**
-     * @param array $buffer , array of log data
-     * @return array
-     */
-    public function map(array $buffer): array
-    {
-        return array_map(function ($node) {
-            return [
-                ip2long($node['ip']),
-                (new DateTime($node['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
-                $node['uri'],
-                $node['method'],
-                $node['protocol'],
-                (int)$node['status'],
-                (int)$node['bytes'],
-                $node['referer'],
-                $node['userAgent']
-            ];
-        }, $buffer);
-    }
-
-    /**
-     * @return array
-     */
-    public function getClickhouseFields(): array
-    {
-        return [
-            'ip',
-            'time',
-            'uri',
-            'method',
-            'protocol',
-            'status',
-            'bytes',
-            'referer',
-            'userAgent',
-        ];
-    }
-
-    /**
      * @param string $rawMessage
      * @return array
      * @throws ParseException
@@ -103,35 +64,21 @@ class NginxLogParser extends AbstractLogParser implements LogParserInterface
                 return [];
             }
 
-            return $mapped;
+            return [
+                ip2long($mapped['ip']),
+                (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
+                (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d'),
+                $mapped['uri'],
+                $mapped['method'],
+                $mapped['protocol'],
+                (int)$mapped['status'],
+                (int)$mapped['bytes'],
+                $mapped['referer'],
+                $mapped['userAgent']
+            ];
         } catch (Exception $exception) {
             throw new ParseException("Error while parsing message %s, %s\n", $rawMessage, $exception->getMessage());
         }
-    }
-
-    /**
-     * @param string $databaseName
-     * @param string $tableName
-     * @return string
-     */
-    public function getClickhhouseTableDdl(string $databaseName, string $tableName): string
-    {
-        return <<<SQL
-create table {$databaseName}.{$tableName}
-(
-	ip UInt32,
-	time DateTime,
-	date Date default toDate(time),
-	uri String,
-	method String,
-	protocol String,
-	status UInt16,
-	bytes UInt16,
-	referer String,
-	userAgent String
-)
-engine = MergeTree(date, (ip, status, time, uri, method, referer, userAgent), 8192);
-SQL;
     }
 
     /**

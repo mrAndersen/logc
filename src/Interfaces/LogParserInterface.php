@@ -21,22 +21,9 @@ interface LogParserInterface
     public function parse(string $rawMessage): array;
 
     /**
-     * @param string $databaseName
-     * @param string $tableName
-     * @return string
-     */
-    public function getClickhhouseTableDdl(string $databaseName, string $tableName): string;
-
-    /**
      * @return array
      */
     public function getClickhouseFields(): array;
-
-    /**
-     * @param array $buffer
-     * @return array
-     */
-    public function map(array $buffer): array;
 
     /**
      * @return array

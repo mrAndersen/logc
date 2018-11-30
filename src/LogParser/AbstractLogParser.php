@@ -21,7 +21,7 @@ abstract class AbstractLogParser
     /**
      * @var string
      */
-    protected $name = "some_output";
+    protected $name = "";
 
     /**
      * AbstractLogParser constructor.
@@ -43,17 +43,19 @@ abstract class AbstractLogParser
     }
 
     /**
-     * @return string
+     * @return array
      */
-    public function getName(): string
+    public function getClickhouseFields(): array
     {
-        return $this->name;
+        $schema = $this->settings['schema'];
+        return array_keys($schema);
     }
 
     /**
      * @param string $name
+     * @return mixed
      */
-    public function setName(string $name): void
+    public function setName(string $name)
     {
         $this->name = $name;
     }

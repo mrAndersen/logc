@@ -176,12 +176,12 @@ class LogcUdpServer
 
                 $this->flush();
                 $this->stdout(sprintf(
-                    "Buffer flushed, %d total, %s condition, %d bytes in %d ms, %f memory",
+                    "Buffer flushed, %d total, %s condition, %d bytes in %d ms, %.2f MB memory usage",
                     $buffCount,
                     $condition,
                     $buffSize,
                     round($this->lastFlushDuration * 1000, 0),
-                    round(memory_get_usage(true) / 1024 / 1024, 2)
+                    memory_get_usage(true) / 1024 / 1024
                 ));
             }
 
@@ -235,6 +235,33 @@ class LogcUdpServer
     }
 
     /**
+     * @param LogParserInterface $parser
+     * @return string
+     * @throws Exception
+     */
+    protected function createDdl(LogParserInterface $parser)
+    {
+        $schema = $parser->getSettings()['schema'] ?? null;
+        $databaseName = $parser->getSettings()['database'] ?? null;
+        $tableName = $parser->getSettings()['table'] ?? null;
+        $engine = $parser->getSettings()['engine'] ?? null;
+
+        if (!$schema || !$databaseName || !$tableName || !$engine) {
+            throw new Exception(sprintf("Unable to create table for %s output, no table, database or schema provided", $parser->getName()));
+        }
+
+        $temp = [];
+
+        foreach ($schema as $field => $type) {
+            $temp[] = "{$field} {$type}";
+        }
+
+        $tableDdl = implode(',', $temp);
+        $sql = "create table {$databaseName}.{$tableName} ({$tableDdl}) engine = {$engine}";
+        return $sql;
+    }
+
+    /**
      *
      * @throws Exception
      */
@@ -254,10 +281,7 @@ class LogcUdpServer
                     );
 
                     $parser->getClient()->write(
-                        $parser->getClickhhouseTableDdl(
-                            $parser->getSettings()['database'],
-                            $parser->getSettings()['table']
-                        )
+                        $this->createDdl($parser)
                     );
 
                     $this->stdout(
@@ -327,11 +351,15 @@ class LogcUdpServer
             foreach ($this->parsers as $parser) {
                 $this->currentWriteParser = $parser;
 
+                if (!$this->buffer[$parser->getName()]) {
+                    continue;
+                }
+
                 $parser
                     ->getClient()
                     ->insert(
                         $parser->getSettings()['table'],
-                        $parser->map($this->buffer[$parser->getName()]),
+                        $this->buffer[$parser->getName()],
                         $parser->getClickhouseFields()
                     );
             }
@@ -343,6 +371,10 @@ class LogcUdpServer
                         $this->currentWriteParser->getName(),
                         $tryTtl
                     )
+                );
+
+                $this->stdout(
+                    $exception->getMessage()
                 );
 
                 sleep($tryTtl);

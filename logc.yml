@@ -3,7 +3,7 @@ logc:
   port: 914
   # const VERBOSITY_NONE = 0;
   # const VERBOSITY_DEBUG = 1;
-  verbosity: 1
+  verbosity: 0
   buffer:
     # items
     max_flush_size: 10000
@@ -11,7 +11,40 @@ logc:
     max_flush_period: 10
 
 outputs:
-  clickhouse_nginx:
+  application:
+    parser:  Logc\LogParser\ApplicationLogParser
+    timeout:
+      connection: 2
+      #single operation
+      write: 1
+    port: 8123
+    host: "clickhouse"
+    username: "default"
+    password: ~
+    database: "default"
+    table: "application"
+    engine: "MergeTree(date, (channel, time, message, customType), 8192)"
+    schema:
+      time: DateTime
+      date: Date default toDate(time)
+      channel: String
+      message: String
+      level: UInt16
+      customType: Int16
+      p1: Nullable(String)
+      p2: Nullable(String)
+      p3: Nullable(String)
+      p4: Nullable(String)
+      p5: Nullable(String)
+      p6: Nullable(String)
+      i1: Nullable(Float64)
+      i2: Nullable(Float64)
+      i3: Nullable(Float64)
+      i4: Nullable(Float64)
+      i5: Nullable(Float64)
+      i6: Nullable(Float64)
+      other: Array(String)
+  nginx:
     parser:  Logc\LogParser\Cm2NginxLogParser
     timeout:
       connection: 2
@@ -23,4 +56,15 @@ outputs:
     password: ~
     database: "default"
     table: "nginx"
-
+    engine: "MergeTree(date, (status, time, uri, method), 8192)"
+    schema:
+      time: DateTime
+      date: Date default toDate(time)
+      uri: String
+      status: UInt16
+      referer: String
+      bytes: UInt16
+      cache: String
+      method: String
+      body: String
+      requestTime: Float32

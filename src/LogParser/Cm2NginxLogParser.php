@@ -20,7 +20,7 @@ class Cm2NginxLogParser extends AbstractLogParser implements LogParserInterface
     /**
      * @var array
      */
-    private $mapping = [
+    private $regexMapping = [
         'unknown1',
         'unknown2',
         'date',
@@ -44,27 +44,6 @@ class Cm2NginxLogParser extends AbstractLogParser implements LogParserInterface
     }
 
     /**
-     * @param array $buffer
-     * @return array
-     */
-    public function map(array $buffer): array
-    {
-        return array_map(function ($node) {
-            return [
-                (new DateTime($node['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
-                $node['uri'],
-                (int)$node['status'],
-                $node['referer'],
-                (int)$node['bytes'],
-                $node['cache'],
-                $node['method'],
-                $node['body'],
-                (float)$node['requestTime'],
-            ];
-        }, $buffer);
-    }
-
-    /**
      * @return string
      */
     public function getName(): string
@@ -84,9 +63,9 @@ class Cm2NginxLogParser extends AbstractLogParser implements LogParserInterface
             unset($matches[0]);
 
             $matches = array_values($matches);
-            $mapped = array_combine($this->mapping, $matches);
+            $mapped = array_combine($this->regexMapping, $matches);
 
-            if (count($matches) !== count($this->mapping)) {
+            if (count($matches) !== count($this->regexMapping)) {
                 throw new Exception("Error mapping regex");
             }
 
@@ -94,53 +73,21 @@ class Cm2NginxLogParser extends AbstractLogParser implements LogParserInterface
                 return [];
             }
 
-            return $mapped;
+            return [
+                (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
+                (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d'),
+                $mapped['uri'],
+                (int)$mapped['status'],
+                $mapped['referer'],
+                (int)$mapped['bytes'],
+                $mapped['cache'],
+                $mapped['method'],
+                $mapped['body'],
+                (float)$mapped['requestTime'],
+            ];
         } catch (Exception $exception) {
             throw new ParseException("Error while parsing message %s, %s\n", $rawMessage, $exception->getMessage());
         }
-    }
-
-    /**
-     * @param string $databaseName
-     * @param string $tableName
-     * @return string
-     */
-    public function getClickhhouseTableDdl(string $databaseName, string $tableName): string
-    {
-        return <<<SQL
-create table {$databaseName}.{$tableName}
-(
-    time DateTime,
-    date Date default toDate(time),
-    uri String,
-    status UInt16,
-    referer String,
-    bytes UInt16,
-    cache String,
-    method String,
-    body String,
-    requestTime Float32
-)
-engine = MergeTree(date, (status, time, uri, method), 8192);
-SQL;
-    }
-
-    /**
-     * @return array
-     */
-    public function getClickhouseFields(): array
-    {
-        return [
-            'time',
-            'uri',
-            'status',
-            'referer',
-            'bytes',
-            'cache',
-            'method',
-            'body',
-            'requestTime'
-        ];
     }
 
 
