@@ -22,7 +22,6 @@ COPY ./ /usr/local/logc/
 WORKDIR /usr/local/logc
 
 RUN composer install --optimize-autoloader
-EXPOSE 914
 
-#CMD php /usr/local/logc/logc --configuration=/usr/local/logc/logc.yml
-CMD tail -f /dev/null
+CMD php /usr/local/logc/logc --configuration=/usr/local/logc/logc.yml
+#CMD tail -f /dev/null
