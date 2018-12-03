@@ -6,16 +6,14 @@ networks:
 services:
   logc:
     restart: always
-    environment:
-      - ENV=dev
-      - XDEBUG_CONFIG=remote_host=host.docker.internal
-      - PHP_IDE_CONFIG=serverName=logc
+    env_file:
+      - .env
     volumes:
       - ./:/usr/local/logc
     ports:
       - 914:914/udp
     build:
-      dockerfile: ./docker/Dockerfile
+      dockerfile: Dockerfile
       context: .
     container_name: logc
     networks:
