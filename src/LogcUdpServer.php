@@ -235,7 +235,7 @@ class LogcUdpServer
     protected function stdout(string $message)
     {
         $d = new DateTime();
-        echo(sprintf("[%s] {$message}\n", $d->format('c')));
+        echo(sprintf("[%s] %s\n", $d->format('c'), $message));
     }
 
     /**
