@@ -6,7 +6,6 @@ namespace Logc\LogParser;
 
 use DateTime;
 use DateTimeZone;
-use Logc\Exception\ParseException;
 use Logc\Interfaces\LogParserInterface;
 
 class ApplicationLogParser extends AbstractLogParser implements LogParserInterface
@@ -20,10 +19,9 @@ class ApplicationLogParser extends AbstractLogParser implements LogParserInterfa
     {
         $rawMessage = str_replace("<42> cm2_application ", "", $rawMessage);
         $rawMessage = json_decode($rawMessage, true);
-        $rawMessage = $rawMessage[0] ?? null;
 
         if (!$rawMessage) {
-            throw new ParseException('Unable to parse message');
+            return [];
         }
 
         $result = [];
@@ -54,7 +52,7 @@ class ApplicationLogParser extends AbstractLogParser implements LogParserInterfa
             ksort($customMessage['stringProperties']);
             ksort($customMessage['floatProperties']);
 
-            $result = array_merge($result, [$customMessage['type']], $customMessage['stringProperties'], $customMessage['floatProperties'],[[]]);
+            $result = array_merge($result, [$customMessage['type']], $customMessage['stringProperties'], $customMessage['floatProperties'], [[]]);
             return $result;
         }
 
