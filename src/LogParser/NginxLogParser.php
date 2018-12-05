@@ -77,7 +77,14 @@ class NginxLogParser extends AbstractLogParser implements LogParserInterface
                 $mapped['userAgent']
             ];
         } catch (Exception $exception) {
-            throw new ParseException("Error while parsing message %s, %s\n", $rawMessage, $exception->getMessage());
+            throw new ParseException(
+                sprintf(
+                    "Error while parsing message %s, matches %s, %s\n",
+                    $rawMessage,
+                    implode(',', $matches),
+                    $exception->getMessage()
+                )
+            );
         }
     }
 
