@@ -15,7 +15,7 @@ class Cm2NginxLogParser extends AbstractLogParser implements LogParserInterface
     /**
      * @var string
      */
-    private $regex = '<(\d+)>(.*)nginx:\s<time=(.*)\|url=(.*)\|status=(\d+)\|referer=(.*)\|bytes=(\d+)\|cache=(.*)\|method=(GET|POST|PUT|HEAD|PATCH|DELETE|UPDATE|OPTIONS|TRACE|PATCH)\|body=(.*)\|request_time=(.*)>$';
+    private $regex = '<(\d+)>(.*)nginx:\scm2_nginx<time=(.*)\|url=(.*)\|status=(\d+)\|referer=(.*)\|bytes=(\d+)\|cache=(.*)\|method=(GET|POST|PUT|HEAD|PATCH|DELETE|UPDATE|OPTIONS|TRACE|PATCH)\|body=(.*)\|request_time=(.*)>$';
 
     /**
      * @var array
@@ -48,7 +48,7 @@ class Cm2NginxLogParser extends AbstractLogParser implements LogParserInterface
      */
     public function getName(): string
     {
-        return "nginx";
+        return "nginx cm2_nginx";
     }
 
     /**
