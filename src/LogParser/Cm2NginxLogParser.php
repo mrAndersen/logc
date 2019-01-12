@@ -48,7 +48,7 @@ class Cm2NginxLogParser extends AbstractLogParser implements LogParserInterface
      */
     public function getName(): string
     {
-        return "nginx cm2_nginx";
+        return "nginx: cm2_nginx";
     }
 
     /**
