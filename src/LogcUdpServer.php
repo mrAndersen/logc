@@ -6,6 +6,7 @@ use DateTime;
 use Exception;
 use Logc\Interfaces\LogParserInterface;
 use Symfony\Component\Yaml\Yaml;
+use Throwable;
 
 class LogcUdpServer
 {
@@ -189,7 +190,12 @@ class LogcUdpServer
                 ));
             }
 
-            $bytes = socket_recvfrom($this->socket, $message, 4096, 0, $senderIp, $senderPort);
+            try {
+                $bytes = socket_recvfrom($this->socket, $message, 4096, 0, $senderIp, $senderPort);
+            } catch (Throwable $throwable) {
+                $bytes = false;
+                $this->stdout(sprintf("Error while socket_recvfrom on message %s", $message));
+            }
 
             if (!$bytes) {
                 if ($this->verbosity == self::VERBOSITY_DEBUG) {
@@ -206,7 +212,12 @@ class LogcUdpServer
 
             foreach ($this->parsers as $parser) {
                 if (strpos($message, $parser->getName()) !== false) {
-                    $parsed = $parser->parse($message);
+
+                    try {
+                        $parsed = $parser->parse($message);
+                    } catch (Throwable $throwable) {
+                        $parsed = false;
+                    }
 
                     if (!$parsed) {
                         $this->stdout(sprintf("Unable to parse message %s", $message));
@@ -236,33 +247,6 @@ class LogcUdpServer
     {
         $d = new DateTime();
         echo(sprintf("[%s] %s\n", $d->format('c'), $message));
-    }
-
-    /**
-     * @param LogParserInterface $parser
-     * @return string
-     * @throws Exception
-     */
-    protected function createDdl(LogParserInterface $parser)
-    {
-        $schema = $parser->getSettings()['schema'] ?? null;
-        $databaseName = $parser->getSettings()['database'] ?? null;
-        $tableName = $parser->getSettings()['table'] ?? null;
-        $engine = $parser->getSettings()['engine'] ?? null;
-
-        if (!$schema || !$databaseName || !$tableName || !$engine) {
-            throw new Exception(sprintf("Unable to create table for %s output, no table, database or schema provided", $parser->getName()));
-        }
-
-        $temp = [];
-
-        foreach ($schema as $field => $type) {
-            $temp[] = "{$field} {$type}";
-        }
-
-        $tableDdl = implode(',', $temp);
-        $sql = "create table {$databaseName}.{$tableName} ({$tableDdl}) engine = {$engine}";
-        return $sql;
     }
 
     /**
@@ -311,6 +295,33 @@ class LogcUdpServer
             $this->stdout($exception->getMessage());
             $this->close();
         }
+    }
+
+    /**
+     * @param LogParserInterface $parser
+     * @return string
+     * @throws Exception
+     */
+    protected function createDdl(LogParserInterface $parser)
+    {
+        $schema = $parser->getSettings()['schema'] ?? null;
+        $databaseName = $parser->getSettings()['database'] ?? null;
+        $tableName = $parser->getSettings()['table'] ?? null;
+        $engine = $parser->getSettings()['engine'] ?? null;
+
+        if (!$schema || !$databaseName || !$tableName || !$engine) {
+            throw new Exception(sprintf("Unable to create table for %s output, no table, database or schema provided", $parser->getName()));
+        }
+
+        $temp = [];
+
+        foreach ($schema as $field => $type) {
+            $temp[] = "{$field} {$type}";
+        }
+
+        $tableDdl = implode(',', $temp);
+        $sql = "create table {$databaseName}.{$tableName} ({$tableDdl}) engine = {$engine}";
+        return $sql;
     }
 
     /**
@@ -395,6 +406,21 @@ class LogcUdpServer
                 $this->close();
             }
         }
+    }
+
+    /**
+     * @param string $message
+     * @throws Exception
+     */
+    protected function appendFileLog(string $message)
+    {
+        $logFile = "../error.log";
+
+        if (!file_exists($logFile)) {
+            file_put_contents($logFile, (new DateTime())->format('d.m.Y') . "\n");
+        }
+
+        file_put_contents($logFile, $message . "\n", FILE_APPEND);
     }
 }
 

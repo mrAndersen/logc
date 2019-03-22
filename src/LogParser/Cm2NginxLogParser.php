@@ -54,48 +54,35 @@ class Cm2NginxLogParser extends AbstractLogParser implements LogParserInterface
     /**
      * @param string $rawMessage
      * @return array
-     * @throws ParseException
+     * @throws Exception
      */
     public function parse(string $rawMessage): array
     {
-        try {
-            preg_match("/" . $this->regex . "/", $rawMessage, $matches);
-            unset($matches[0]);
+        preg_match("/" . $this->regex . "/", $rawMessage, $matches);
+        unset($matches[0]);
 
-            $matches = array_values($matches);
-            $mapped = array_combine($this->regexMapping, $matches);
+        $matches = array_values($matches);
+        $mapped = array_combine($this->regexMapping, $matches);
 
-            if (count($matches) !== count($this->regexMapping)) {
-                throw new Exception("Error mapping regex");
-            }
-
-            if (!$mapped) {
-                return [];
-            }
-
-            return [
-                (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
-                (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d'),
-                $mapped['uri'],
-                (int)$mapped['status'],
-                $mapped['referer'],
-                (int)$mapped['bytes'],
-                $mapped['cache'],
-                $mapped['method'],
-                $mapped['body'],
-                (float)$mapped['requestTime'],
-            ];
-        } catch (Exception $exception) {
-            throw new ParseException(
-                sprintf(
-                    "Error while parsing message %s, matches %s, %s\n",
-                    $rawMessage,
-                    implode(',', $matches),
-                    $exception->getMessage()
-                )
-            );
+        if (count($matches) !== count($this->regexMapping)) {
+            throw new Exception("Error mapping regex");
         }
+
+        if (!$mapped) {
+            return [];
+        }
+
+        return [
+            (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
+            (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d'),
+            $mapped['uri'],
+            (int)$mapped['status'],
+            $mapped['referer'],
+            (int)$mapped['bytes'],
+            $mapped['cache'],
+            $mapped['method'],
+            $mapped['body'],
+            (float)$mapped['requestTime'],
+        ];
     }
-
-
 }

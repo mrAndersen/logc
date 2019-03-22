@@ -45,47 +45,36 @@ class NginxLogParser extends AbstractLogParser implements LogParserInterface
     /**
      * @param string $rawMessage
      * @return array
-     * @throws ParseException
+     * @throws Exception
      */
     public function parse(string $rawMessage): array
     {
-        try {
-            preg_match("/" . $this->regex . "/", $rawMessage, $matches);
-            unset($matches[0]);
+        preg_match("/" . $this->regex . "/", $rawMessage, $matches);
+        unset($matches[0]);
 
-            $matches = array_values($matches);
-            $mapped = array_combine($this->mapping, $matches);
+        $matches = array_values($matches);
+        $mapped = array_combine($this->mapping, $matches);
 
-            if (count($matches) !== count($this->mapping)) {
-                throw new Exception("Error mapping regex");
-            }
-
-            if (!$mapped) {
-                return [];
-            }
-
-            return [
-                ip2long($mapped['ip']),
-                (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
-                (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d'),
-                $mapped['uri'],
-                $mapped['method'],
-                $mapped['protocol'],
-                (int)$mapped['status'],
-                (int)$mapped['bytes'],
-                $mapped['referer'],
-                $mapped['userAgent']
-            ];
-        } catch (Exception $exception) {
-            throw new ParseException(
-                sprintf(
-                    "Error while parsing message %s, matches %s, %s\n",
-                    $rawMessage,
-                    implode(',', $matches),
-                    $exception->getMessage()
-                )
-            );
+        if (count($matches) !== count($this->mapping)) {
+            throw new Exception("Error mapping regex");
         }
+
+        if (!$mapped) {
+            return [];
+        }
+
+        return [
+            ip2long($mapped['ip']),
+            (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d H:i:s'),
+            (new DateTime($mapped['date']))->setTimezone(new DateTimeZone('UTC'))->format('Y-m-d'),
+            $mapped['uri'],
+            $mapped['method'],
+            $mapped['protocol'],
+            (int)$mapped['status'],
+            (int)$mapped['bytes'],
+            $mapped['referer'],
+            $mapped['userAgent']
+        ];
     }
 
     /**

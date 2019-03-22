@@ -6,6 +6,7 @@ namespace Logc\LogParser;
 
 use DateTime;
 use DateTimeZone;
+use Exception;
 use Logc\Interfaces\LogParserInterface;
 
 class ApplicationLogParser extends AbstractLogParser implements LogParserInterface
@@ -13,7 +14,7 @@ class ApplicationLogParser extends AbstractLogParser implements LogParserInterfa
     /**
      * @param string $rawMessage
      * @return array
-     * @throws \Exception
+     * @throws Exception
      */
     public function parse(string $rawMessage): array
     {

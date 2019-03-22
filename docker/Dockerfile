@@ -1,13 +1,13 @@
 FROM php:7.3.3-cli-stretch
 
-RUN apt-get update && apt-get install -y git zlib1g-dev procps
+RUN apt-get update && apt-get install -y git zlib1g-dev procps libzip-dev
 RUN docker-php-ext-install sockets zip
 
 ARG ENV='dev'
 
 # xdebug
 RUN if [ ${ENV} = 'dev' ]; then \
-    pecl install xdebug-2.6.0 \
+    pecl install xdebug-2.7.0 \
     && docker-php-ext-enable xdebug \
     && echo "xdebug.remote_enable=on" >> /usr/local/etc/php/conf.d/xdebug.ini \
     && echo "xdebug.force_display_errors=1" >> /usr/local/etc/php/conf.d/xdebug.ini \
