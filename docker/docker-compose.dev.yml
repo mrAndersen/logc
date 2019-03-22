@@ -5,7 +5,7 @@ networks:
 
 services:
   logc:
-    restart: always
+    restart: no
     env_file:
       - .env
     volumes:
@@ -13,7 +13,7 @@ services:
     ports:
       - 914:914/udp
     build:
-      dockerfile: Dockerfile
+      dockerfile: ./docker/dev_Dockerfile
       context: .
     container_name: logc
     networks:

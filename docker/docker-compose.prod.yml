@@ -1,0 +1,20 @@
+version: "3.5"
+networks:
+  bcm-network:
+    external: true
+
+services:
+  logc:
+    restart: always
+    env_file:
+      - .env
+    volumes:
+      - ./:/usr/local/logc
+    ports:
+      - 914:914/udp
+    build:
+      dockerfile: ./docker/Dockerfile
+      context: .
+    container_name: logc
+    networks:
+      - bcm-network
