@@ -191,7 +191,7 @@ class LogcUdpServer
             }
 
             try {
-                $bytes = socket_recvfrom($this->socket, $message, 4096, 0, $senderIp, $senderPort);
+                $bytes = socket_recvfrom($this->socket, $message, 10240, 0, $senderIp, $senderPort);
             } catch (Throwable $throwable) {
                 $bytes = false;
                 $this->stdout(sprintf("Error while socket_recvfrom on message %s", $message));
