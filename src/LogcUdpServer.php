@@ -153,7 +153,7 @@ class LogcUdpServer
 
         $this->startTime = microtime(true);
         $this->lastFlushTime = $this->startTime;
-        $sleepInterval = 10 * 1000;
+        $sleepInterval = 1 * 1000;
 
         while (1) {
             $this->currentTime = microtime(true);
