@@ -1,3 +1,5 @@
-`docker pull mrandersen7/logc:0.1.16`
+```bash
+docker pull mrandersen7/logc:0.3.2
+```
 
-`docker run -d --name=logc --net-alias=logc -p 914:914/udp -v /logc.ini:/usr/local/logc/logc.ini mrandersen7/logc:0.1.16`
+For latest logc image
