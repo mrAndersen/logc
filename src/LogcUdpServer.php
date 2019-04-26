@@ -153,7 +153,7 @@ class LogcUdpServer
 
         $this->startTime = microtime(true);
         $this->lastFlushTime = $this->startTime;
-        $sleepInterval = 1000000;
+        $sleepInterval = 10 * 1000;
 
         while (1) {
             $this->currentTime = microtime(true);
@@ -198,10 +198,6 @@ class LogcUdpServer
             }
 
             if (!$bytes) {
-                if ($this->verbosity == self::VERBOSITY_DEBUG) {
-                    $this->stdout(sprintf("No data, sleeping %dms", $sleepInterval / 1000));
-                }
-
                 usleep($sleepInterval);
                 continue;
             }
